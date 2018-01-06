@@ -48,13 +48,7 @@ defmodule Vote do
 
 				# find all the ballots that had the elected candidate as the first pick
 				# so that their votes can be distributed
-				electing_ballots = ballots
-				|> Enum.filter(fn b ->
-					b
-					|> Enum.min_by(fn {_, v} -> v end, fn -> %{exhausted: 0} end)
-					|> Tuple.to_list
-					|> Enum.member?(candidate)
-				end)
+				electing_ballots = contributing_ballots(ballots, candidate)
 
 				# each second choice vote is distributed as a fraction of the surplus
 				weight = weight * surplus / Enum.count(electing_ballots)
@@ -74,18 +68,9 @@ defmodule Vote do
 				|> Map.put(:round, round)
 				result = Map.put(result, excluded_candidate, excluded_result)
 
-				# find all the ballots that had the excluded candidate as the first pick
-				# so that their votes can be distributed
-				excluding_ballots = ballots
-				|> Enum.filter(fn b ->
-					b
-					|> Enum.min_by(fn {_, v} -> v end, fn -> %{exhausted: 0} end)
-					|> Tuple.to_list
-					|> Enum.member?(excluded_candidate)
-				end)
-
-				# each second choice vote is distributed as a fraction of the excluded votes
+				excluding_ballots = contributing_ballots(ballots, excluded_candidate)
 				next_ballots = trim(excluding_ballots, excluded_candidate)
+
 				evaluate(result, next_ballots, round + 1, weight, elected, seats, quota)
 			end
 		end
@@ -113,8 +98,7 @@ defmodule Vote do
 		|> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
 	end
 
-	# filters the ballots to remove votes for a candidate
-	def filtered_ballots(ballots, candidate) do
+	def contributing_ballots(ballots, candidate) do
 		ballots
 		|> Enum.filter(fn b ->
 			b
