@@ -10,7 +10,7 @@ defmodule VoteTest do
     	Enum.map(1..17, fn _ -> %{"a" => 2, "b" => 3, "c" => 4, "d" => 1} end)
     ])
 
-    result = Vote.evaluate(ballots, 2)
+    result = Vote.stv(ballots, 2)
     IO.inspect result
 
     a = Map.get(result, "a")

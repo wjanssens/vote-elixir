@@ -2,7 +2,7 @@ defmodule Vote do
 
 	# evaluate the election
 	# given ballots and the number of seats to elect, returns the election results
-	def evaluate(ballots, seats) do
+	def stv(ballots, seats) do
 		# find the unique list of candidates from all the ballots
 		candidates = ballots
 		|> Enum.flat_map(fn b -> Map.keys(b) end)
@@ -19,12 +19,12 @@ defmodule Vote do
 		# calculate the number of votes it takes to be elected
 		quota = Float.floor((Enum.count(ballots) / (seats + 1)) + 1)
 
-		evaluate(result, ballots, 1, 0, seats, quota)
+		stv(result, ballots, 1, 0, seats, quota)
 	end
 
 	# recursively evaluate the rounds of the election
 	# returns updated results
-	def evaluate(result, ballots, round, elected, seats, quota) do
+	def stv(result, ballots, round, elected, seats, quota) do
 		#IO.puts "round #{round}"
 		#IO.inspect result
 		if seats == elected do
@@ -58,7 +58,7 @@ defmodule Vote do
 
 				# perform the next round using ballots that exclude the elected candidate
 				next_ballots = trim(ballots, elected_candidate)
-				evaluate(result, next_ballots, round + 1, elected + 1, seats, quota)
+				stv(result, next_ballots, round + 1, elected + 1, seats, quota)
 			else
 				# a candidate must be excluded
 				# find the candidate with the least votes
@@ -83,7 +83,7 @@ defmodule Vote do
 
 				# perform the next round using ballots that exclude the elected candidate
 				next_ballots = trim(ballots, excluded_candidate)
-				evaluate(result, next_ballots, round + 1, elected, seats, quota)
+				stv(result, next_ballots, round + 1, elected, seats, quota)
 			end
 		end
 	end
