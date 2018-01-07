@@ -11,6 +11,26 @@ defmodule VoteTest do
     ])
 
     result = Vote.evaluate(ballots, 2)
-    IO.inspect(result)
+    IO.inspect result
+
+    a = Map.get(result, "a")
+    assert a.round == 1
+    assert a.votes == 40
+    assert a.surplus == 20
+    assert a.status == :elected
+
+    b = Map.get(result, "b")
+    assert b.round == 2
+    assert b.votes == 8
+    assert b.status == :excluded
+
+    c = Map.get(result, "c")
+    assert c.round == 3
+    assert c.votes == 20
+    assert c.surplus == 0
+    assert c.status == :elected
+
+    d = Map.get(result, "d")
+    assert d.votes == 17
   end
 end
