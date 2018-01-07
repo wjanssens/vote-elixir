@@ -101,7 +101,7 @@ defmodule Vote do
 		ballots
 		|> Enum.filter(fn b ->
 			b
-			|> Enum.min_by(fn {_, v} -> v end, fn -> %{exhausted: 0} end)
+			|> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
 			|> Tuple.to_list
 			|> Enum.member?(candidate)
 		end)
@@ -113,7 +113,7 @@ defmodule Vote do
 		|> Enum.map(fn b ->
 		  b
 			# vote with the lowest rank
-			|> Enum.min_by(fn {_, v} -> v end, fn -> %{exhausted: 0} end)
+			|> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
 			|> Tuple.to_list
 			# candidate from the vote
 			|> List.first
