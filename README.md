@@ -37,3 +37,7 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at [https://hexdocs.pm/vote](https://hexdocs.pm/vote).
+
+## References
+* https://en.wikipedia.org/wiki/Counting_single_transferable_votes
+* http://blog.opavote.com/2016/11/plain-english-explanation-of-scottish.html
