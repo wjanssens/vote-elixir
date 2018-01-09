@@ -87,7 +87,7 @@ defmodule VoteTest do
 
     result = Vote.stv(ballots, 3)
 
-    # these results differ from CGP grey since he used Hare quota and this is using Droop quota
+    # these results differ from CGP grey since he used Hare quota (26) and this is using Droop quota (33)
     c = Map.get(result, "white tiger")
     assert c.round == 1
     assert c.votes == 65
@@ -100,7 +100,7 @@ defmodule VoteTest do
     assert c.votes == 40
     assert c.surplus == 14
     assert c.status == :elected
-    assert c.exhausted == 14
+    assert c.exhausted == 14 # there were no third choices so the 14 surplus are exhausted
 
     c = Map.get(result, "silverback")
     assert c.round == 3
@@ -112,7 +112,8 @@ defmodule VoteTest do
     assert c.round == 4
     assert c.votes == 34
     assert c.status == :elected
-    assert c.exhausted == 8
+    assert c.surplus == 8
+    assert c.exhausted == 8 # there were no third choices so the 8 surplus are exhausted
   end
 
   test "animal_stv_3" do
