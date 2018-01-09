@@ -2,7 +2,7 @@ defmodule VoteTest do
   use ExUnit.Case
   doctest Vote
 
-  test "something" do
+  test "stv" do
 
     ballots = Enum.concat([
     	Enum.map(1..16, fn _ -> %{"a" => 1, "b" => 2, "c" => 3, "d" => 4} end),
@@ -11,7 +11,7 @@ defmodule VoteTest do
     ])
 
     result = Vote.stv(ballots, 2)
-    IO.inspect result
+    # IO.inspect result
 
     a = Map.get(result, "a")
     assert a.round == 1
@@ -29,6 +29,30 @@ defmodule VoteTest do
     assert c.votes == 20
     assert c.surplus == 0
     assert c.status == :elected
+
+    d = Map.get(result, "d")
+    assert d.votes == 17
+  end
+
+  test "plurality" do
+    ballots = Enum.concat([
+      Enum.map(1..16, fn _ -> %{"a" => 1, "b" => 2, "c" => 3, "d" => 4} end),
+      Enum.map(1..24, fn _ -> %{"a" => 1, "b" => 3, "c" => 2, "d" => 4} end),
+      Enum.map(1..17, fn _ -> %{"a" => 2, "b" => 3, "c" => 4, "d" => 1} end)
+    ])
+
+    result = Vote.plurality(ballots)
+    # IO.inspect result
+
+    a = Map.get(result, "a")
+    assert a.votes == 40
+    assert a.status == :elected
+
+    b = Map.get(result, "b")
+    assert b.votes == 0
+
+    c = Map.get(result, "c")
+    assert c.votes == 0
 
     d = Map.get(result, "d")
     assert d.votes == 17

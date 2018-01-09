@@ -1,5 +1,25 @@
 defmodule Vote do
 
+	def plurality(ballots) do
+		candidates = ballots
+		|> Enum.flat_map(fn b -> Map.keys(b) end)
+		|> Enum.uniq
+
+		# create a result that has an empty entry for every candidate
+		result = candidates
+		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
+
+		result = distribute(ballots, result)
+
+		{elected_candidate, elected_result} = result
+		|> Enum.max_by(fn {_,v} -> v.votes end)
+
+		elected_result = elected_result
+		|> Map.put(:status, :elected)
+
+		Map.put(result, elected_candidate, elected_result)
+	end
+
 	# evaluate the election
 	# given ballots and the number of seats to elect, returns the election results
 	def stv(ballots, seats) do
@@ -24,7 +44,7 @@ defmodule Vote do
 
 	# recursively evaluate the rounds of the election
 	# returns updated results
-	def stv(result, ballots, round, elected, seats, quota) do
+	defp stv(result, ballots, round, elected, seats, quota) do
 		#IO.puts "round #{round}"
 		#IO.inspect result
 		if seats == elected do
@@ -89,7 +109,7 @@ defmodule Vote do
 	end
 
 	# returns a list of ballots that exclude all votes for a candidate
-	def trim(ballots, candidate) do
+	defp trim(ballots, candidate) do
 		ballots
 		|> Enum.map(fn b -> Map.drop(b, [candidate])
 		end)
@@ -97,7 +117,7 @@ defmodule Vote do
 	end
 
 	# return a list of ballots that contributed to a candidates election or exclusion
-	def used(ballots, candidate) do
+	defp used(ballots, candidate) do
 		ballots
 		|> Enum.filter(fn b ->
 			b
@@ -108,7 +128,7 @@ defmodule Vote do
 	end
 
 	# returns a map of how many votes a candidates has obtained in this round
-	def ranked_votes(ballots) do
+	defp ranked_votes(ballots) do
 		ballots
 		|> Enum.map(fn b ->
 		  b
@@ -124,7 +144,7 @@ defmodule Vote do
 
 	# applies initial vote distribution to result for all candidates
 	# returns updated results
-	def distribute(ballots, result) do
+	defp distribute(ballots, result) do
 		counts = ranked_votes(ballots)
 		Enum.reduce(result, %{}, fn {rk, rv}, a ->
 			# vote count for the current candidate
@@ -136,7 +156,7 @@ defmodule Vote do
 
 	# applies subsequent vote distribution to result for the elected or excluded candidate
 	# returns updated results
-	def distribute(ballots, result, candidate, weight) do
+	defp distribute(ballots, result, candidate, weight) do
 		counts = ranked_votes(trim(ballots, candidate))
 		#IO.puts "distributing #{candidate} weight #{weight}"
 		#IO.inspect counts
