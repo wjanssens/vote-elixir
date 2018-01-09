@@ -2,8 +2,8 @@ defmodule Vote do
 
 	def plurality(ballots) do
 		candidates = ballots
-		|> Enum.flat_map(fn b -> Map.keys(b) end)
-		|> Enum.uniq
+		|> Stream.flat_map(fn b -> Map.keys(b) end)
+		|> Stream.uniq
 
 		# create a result that has an empty entry for every candidate
 		result = candidates
@@ -25,8 +25,8 @@ defmodule Vote do
 	def stv(ballots, seats) do
 		# find the unique list of candidates from all the ballots
 		candidates = ballots
-		|> Enum.flat_map(fn b -> Map.keys(b) end)
-		|> Enum.uniq
+		|> Stream.flat_map(fn b -> Map.keys(b) end)
+		|> Stream.uniq
 
 		# create a result that has an empty entry for every candidate
 		result = candidates
@@ -52,7 +52,7 @@ defmodule Vote do
 		else
 			# find the candidate with the most votes
 			{elected_candidate, elected_result} = result
-			|> Enum.filter(fn {_,v} -> !Map.has_key?(v, :status) end)
+			|> Stream.filter(fn {_,v} -> !Map.has_key?(v, :status) end)
 			|> Enum.max_by(fn {_,v} -> v.votes end)
 
 			if elected_result.votes >= quota do
@@ -83,7 +83,7 @@ defmodule Vote do
 				# a candidate must be excluded
 				# find the candidate with the least votes
 				{excluded_candidate, excluded_result} = result
-				|> Enum.filter(fn {_,v} -> !Map.has_key?(v, :status) end)
+				|> Stream.filter(fn {_,v} -> !Map.has_key?(v, :status) end)
 				|> Enum.min_by(fn {_,v} -> v.votes end)
 
 				#IO.puts "excluding #{excluded_candidate}"
@@ -111,15 +111,14 @@ defmodule Vote do
 	# returns a list of ballots that exclude all votes for a candidate
 	defp trim(ballots, candidate) do
 		ballots
-		|> Enum.map(fn b -> Map.drop(b, [candidate])
-		end)
-		|> Enum.filter(fn b -> !Enum.empty?(b) end)
+		|> Stream.map(fn b -> Map.drop(b, [candidate]) end)
+		|> Stream.filter(fn b -> !Enum.empty?(b) end)
 	end
 
 	# return a list of ballots that contributed to a candidates election or exclusion
 	defp used(ballots, candidate) do
 		ballots
-		|> Enum.filter(fn b ->
+		|> Stream.filter(fn b ->
 			b
 			|> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
 			|> Tuple.to_list
@@ -130,7 +129,7 @@ defmodule Vote do
 	# returns a map of how many votes a candidates has obtained in this round
 	defp ranked_votes(ballots) do
 		ballots
-		|> Enum.map(fn b ->
+		|> Stream.map(fn b ->
 		  b
 			# vote with the lowest rank
 			|> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
