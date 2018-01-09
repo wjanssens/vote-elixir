@@ -9,7 +9,7 @@ defmodule Vote do
 		result = candidates
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
 
-		result = distribute(ballots, result)
+		result = distribute(ranked_votes(ballots), result)
 
 		{elected_candidate, elected_result} = result
 		|> Enum.max_by(fn {_,v} -> v.votes end)
@@ -18,6 +18,30 @@ defmodule Vote do
 		|> Map.put(:status, :elected)
 
 		Map.put(result, elected_candidate, elected_result)
+	end
+
+	def approval(ballots, seats) do
+		candidates = ballots
+		|> Stream.flat_map(fn b -> Map.keys(b) end)
+		|> Stream.uniq
+
+		# create a result that has an empty entry for every candidate
+		result = candidates
+		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
+
+		result = distribute(approval_votes(ballots), result)
+
+		1..seats
+		|> Enum.reduce(result, fn _, a ->
+			{elected_candidate, elected_result} = a
+			|> Stream.filter(fn {_,v} -> !Map.has_key?(v, :status) end)
+			|> Enum.max_by(fn {_,v} -> v.votes end)
+
+			elected_result = elected_result
+			|> Map.put(:status, :elected)
+
+			Map.put(a, elected_candidate, elected_result)
+		end)
 	end
 
 	# evaluate the election
@@ -33,7 +57,7 @@ defmodule Vote do
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
 
 		# perform the initial vote distribution
-		result = distribute(ballots, result)
+		result = distribute(ranked_votes(ballots), result)
 		#IO.inspect result
 
 		# calculate the number of votes it takes to be elected
@@ -126,6 +150,14 @@ defmodule Vote do
 		end)
 	end
 
+	# returns a map of how many approvals a candidate has obtained
+	defp approval_votes(ballots) do
+		ballots
+		|> Stream.flat_map(fn b -> Map.keys(b) end)
+		# count the number of votes for each candidate
+		|> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
+	end
+
 	# returns a map of how many votes a candidates has obtained in this round
 	defp ranked_votes(ballots) do
 		ballots
@@ -143,8 +175,8 @@ defmodule Vote do
 
 	# applies initial vote distribution to result for all candidates
 	# returns updated results
-	defp distribute(ballots, result) do
-		counts = ranked_votes(ballots)
+	# this is shared between all the algorithms
+	defp distribute(counts, result) do
 		Enum.reduce(result, %{}, fn {rk, rv}, a ->
 			# vote count for the current candidate
 			cv = Map.get(counts, rk, 0)
@@ -155,6 +187,7 @@ defmodule Vote do
 
 	# applies subsequent vote distribution to result for the elected or excluded candidate
 	# returns updated results
+	# this is specific to STV
 	defp distribute(ballots, result, candidate, weight) do
 		counts = ranked_votes(trim(ballots, candidate))
 		#IO.puts "distributing #{candidate} weight #{weight}"
