@@ -13,16 +13,16 @@ defmodule VoteTest do
     result = Vote.stv(ballots, 2)
     # IO.inspect result
 
-    a = Map.get(result, "a")
-    assert a.round == 1
-    assert a.votes == 40
-    assert a.surplus == 20
-    assert a.status == :elected
+    c = Map.get(result, "a")
+    assert c.round == 1
+    assert c.votes == 40
+    assert c.surplus == 20
+    assert c.status == :elected
 
-    b = Map.get(result, "b")
-    assert b.round == 2
-    assert b.votes == 8
-    assert b.status == :excluded
+    c = Map.get(result, "b")
+    assert c.round == 2
+    assert c.votes == 8
+    assert c.status == :excluded
 
     c = Map.get(result, "c")
     assert c.round == 3
@@ -30,8 +30,8 @@ defmodule VoteTest do
     assert c.surplus == 0
     assert c.status == :elected
 
-    d = Map.get(result, "d")
-    assert d.votes == 17
+    c = Map.get(result, "d")
+    assert c.votes == 17
   end
 
 
@@ -45,38 +45,35 @@ defmodule VoteTest do
       Enum.map(1..13, fn _ -> %{"lynx" => 1, "tiger" => 2} end)
     ])
 
-    fptp = Vote.plurality(ballots)
-    assert Map.get(fptp, "monkey").status == :elected
-
     result = Vote.stv(ballots, 3)
 
     # these results differ from CGP grey since he used Hare quota and this is using Droop quota
-    monkey = Map.get(result, "monkey")
-    assert monkey.round == 1
-    assert monkey.votes == 33
-    assert monkey.surplus == 7
-    assert monkey.status == :elected
+    c = Map.get(result, "monkey")
+    assert c.round == 1
+    assert c.votes == 33
+    assert c.surplus == 7
+    assert c.status == :elected
 
-    gorilla = Map.get(result, "gorilla")
-    assert gorilla.round == 2
-    assert gorilla.votes == 28
-    assert gorilla.surplus == 2
-    assert gorilla.status == :elected
+    c = Map.get(result, "gorilla")
+    assert c.round == 2
+    assert c.votes == 28
+    assert c.surplus == 2
+    assert c.status == :elected
 
-    tarsier = Map.get(result, "tarsier")
-    assert tarsier.round == 3
-    assert tarsier.votes == 5
-    assert tarsier.status == :excluded
+    c = Map.get(result, "tarsier")
+    assert c.round == 3
+    assert c.votes == 5
+    assert c.status == :excluded
 
-    lynx = Map.get(result, "lynx")
-    assert lynx.round == 4
-    assert lynx.votes == 13
-    assert lynx.status == :excluded
+    c = Map.get(result, "lynx")
+    assert c.round == 4
+    assert c.votes == 13
+    assert c.status == :excluded
 
-    lynx = Map.get(result, "tiger")
-    assert lynx.round == 5
-    assert lynx.votes == 34
-    assert lynx.status == :elected
+    c = Map.get(result, "tiger")
+    assert c.round == 5
+    assert c.votes == 34
+    assert c.status == :elected
   end
 
   test "animal_stv_2" do
@@ -88,33 +85,118 @@ defmodule VoteTest do
       Enum.map(1..18, fn _ -> %{"gorilla" => 1, "silverback" => 2} end),
     ])
 
-    fptp = Vote.plurality(ballots)
-    assert Map.get(fptp, "white tiger").status == :elected
-
     result = Vote.stv(ballots, 3)
 
     # these results differ from CGP grey since he used Hare quota and this is using Droop quota
-    w = Map.get(result, "white tiger")
-    assert w.round == 1
-    assert w.votes == 65
-    assert w.surplus == 39
-    assert w.status == :elected
+    c = Map.get(result, "white tiger")
+    assert c.round == 1
+    assert c.votes == 65
+    assert c.surplus == 39
+    assert c.status == :elected
+    assert c.exhausted == 0
 
-    t = Map.get(result, "tiger")
-    assert t.round == 2
-    assert t.votes == 40
-    assert t.surplus == 14
-    assert t.status == :elected
+    c = Map.get(result, "tiger")
+    assert c.round == 2
+    assert c.votes == 40
+    assert c.surplus == 14
+    assert c.status == :elected
+    assert c.exhausted == 14
 
-    s = Map.get(result, "silverback")
-    assert s.round == 3
-    assert s.votes == 16
-    assert s.status == :excluded
+    c = Map.get(result, "silverback")
+    assert c.round == 3
+    assert c.votes == 16
+    assert c.status == :excluded
+    assert c.exhausted == 0
 
-    g = Map.get(result, "gorilla")
-    assert g.round == 4
-    assert g.votes == 34  
-    assert g.status == :elected
+    c = Map.get(result, "gorilla")
+    assert c.round == 4
+    assert c.votes == 34
+    assert c.status == :elected
+    assert c.exhausted == 8
+  end
+
+  test "animal_stv_3" do
+    ballots = Enum.concat([
+      Enum.map(1..05, fn _ -> %{"tarsier" => 1, "silverback" => 2} end),
+      Enum.map(1..10, fn _ -> %{"gorilla" => 1, "tarsier" => 2, "silverback" => 3} end),
+      Enum.map(1..22, fn _ -> %{"gorilla" => 1, "silverback" => 2} end),
+      Enum.map(1..03, fn _ -> %{"silverback" => 1} end),
+      Enum.map(1..33, fn _ -> %{"owl" => 1, "turtle" => 2} end),
+      Enum.map(1..01, fn _ -> %{"turtle" => 1} end),
+      Enum.map(1..01, fn _ -> %{"snake" => 1, "turtle" => 2} end),
+      Enum.map(1..16, fn _ -> %{"tiger" => 1} end),
+      Enum.map(1..04, fn _ -> %{"lynx" => 1, "tiger" => 2} end),
+      Enum.map(1..02, fn _ -> %{"jackalope" => 1} end),
+      Enum.map(1..02, fn _ -> %{"buffalo" => 1, "jackalope" => 2} end),
+      Enum.map(1..01, fn _ -> %{"buffalo" => 1, "jackalope" => 2, "turtle" => 3} end),
+    ])
+
+    result = Vote.stv(ballots, 5)
+
+    # these results differ from CGP grey since he used Hare quota (20) and this is using Droop (17) quota
+    c = Map.get(result, "owl")
+    assert c.round == 1
+    assert c.votes == 33
+    assert c.surplus == 16
+    assert c.status == :elected
+    assert c.exhausted == 0
+
+    c = Map.get(result, "gorilla")
+    assert c.round == 2
+    assert c.votes == 32
+    assert c.surplus == 15
+    assert c.status == :elected
+    assert c.exhausted == 0
+
+    c = Map.get(result, "turtle")
+    assert c.round == 3
+    assert c.votes == 17
+    assert c.surplus == 0
+    assert c.status == :elected
+    assert c.exhausted == 0
+
+    c = Map.get(result, "snake")
+    assert c.round == 4
+    assert c.votes == 1
+    assert c.status == :excluded
+    assert c.exhausted == 1
+
+    c = Map.get(result, "jackalope")
+    assert c.round == 5
+    assert c.votes == 2
+    assert c.status == :excluded
+    assert c.exhausted == 2
+
+    c = Map.get(result, "buffalo")
+    assert c.round == 6
+    assert c.votes == 3
+    assert c.status == :excluded
+    assert c.exhausted == 3
+
+    c = Map.get(result, "lynx")
+    assert c.round == 7
+    assert c.votes == 4
+    assert c.status == :excluded
+    assert c.exhausted == 0
+
+    c = Map.get(result, "tiger")
+    assert c.round == 8
+    assert c.votes == 20
+    assert c.status == :elected
+    assert c.surplus == 3
+    assert c.exhausted == 3
+
+    c = Map.get(result, "tarsier")
+    assert c.round == 9
+    assert c.votes == 9.6875
+    assert c.status == :excluded
+    assert c.exhausted == 0
+
+    c = Map.get(result, "silverback")
+    assert c.round == 10
+    assert c.votes == 23
+    assert c.status == :elected
+    assert c.exhausted == 6
   end
 
 
@@ -129,18 +211,18 @@ defmodule VoteTest do
     result = Vote.plurality(ballots)
     # IO.inspect result
 
-    a = Map.get(result, "a")
-    assert a.votes == 16
+    c = Map.get(result, "a")
+    assert c.votes == 16
 
-    b = Map.get(result, "b")
-    assert b.votes == 24
-    assert b.status == :elected
+    c = Map.get(result, "b")
+    assert c.votes == 24
+    assert c.status == :elected
 
     c = Map.get(result, "c")
     assert c.votes == 11
 
-    d = Map.get(result, "d")
-    assert d.votes == 17
+    c = Map.get(result, "d")
+    assert c.votes == 17
   end
 
   test "approval" do
@@ -153,18 +235,18 @@ defmodule VoteTest do
     result = Vote.approval(ballots, 2)
     # IO.inspect result
 
-    a = Map.get(result, "a")
-    assert a.votes == 57
-    assert a.status == :elected
+    c = Map.get(result, "a")
+    assert c.votes == 57
+    assert c.status == :elected
 
-    b = Map.get(result, "b")
-    assert b.votes == 16
+    c = Map.get(result, "b")
+    assert c.votes == 16
 
     c = Map.get(result, "c")
     assert c.votes == 24
     assert c.status == :elected
 
-    d = Map.get(result, "d")
-    assert d.votes == 17
+    c = Map.get(result, "d")
+    assert c.votes == 17
   end
 end

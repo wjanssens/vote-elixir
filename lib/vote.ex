@@ -1,5 +1,33 @@
 defmodule Vote do
 
+	@moduledoc """
+	Provides STV, IRV, Plurality, and Approval voting algotithms.
+
+	All the algorithms take a list of ballots in the form:
+	```
+	[
+	  %{"a" => 1, "b" => 2, ...},
+	  %{"c" => 1, "d" => 2, ...},
+	  ...
+	]
+	```
+	and return results in the form:
+	```
+	%{
+	  "a" => %{round: 1, status: :elected, votes: 40.0, surplus: 20.0, exhausted: 0},
+	  "b" => %{round: 2, status: :excluded, votes: 8.0, exhausted: 0},
+	  "c" => %{round: 3, status: :elected, votes: 20.0, surplus: 0.0, exhausted: 0},
+	  "d" => %{votes: 17.0}
+	}
+	```
+	"""
+
+
+	@doc """
+	Evaluates ballots according the traditional First-Past-The-Post algorithm.
+	Ballots must contain exactly one vote, or they will be considered spoiled.
+	This is the best choice when choosing between two candidates.
+	"""
 	def plurality(ballots) do
 		candidates = ballots
 		|> Stream.flat_map(fn b -> Map.keys(b) end)
@@ -9,7 +37,7 @@ defmodule Vote do
 		result = candidates
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
 
-		result = distribute(ranked_votes(ballots), result)
+		result = distribute(ranked_votes(spoil_plurality(ballots)), result)
 
 		{elected_candidate, elected_result} = result
 		|> Enum.max_by(fn {_,v} -> v.votes end)
@@ -20,6 +48,11 @@ defmodule Vote do
 		Map.put(result, elected_candidate, elected_result)
 	end
 
+	@doc """
+	Evaluates ballots according the simplistic approval method.
+	Ballots must contain any number of votes, all of which are considered equal.
+	This is the best choice for polls like deciding what restaurant to go to.
+	"""
 	def approval(ballots, seats) do
 		candidates = ballots
 		|> Stream.flat_map(fn b -> Map.keys(b) end)
@@ -29,7 +62,7 @@ defmodule Vote do
 		result = candidates
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
 
-		result = distribute(approval_votes(ballots), result)
+		result = distribute(approval_votes(spoil_approval(ballots, candidates)), result)
 
 		1..seats
 		|> Enum.reduce(result, fn _, a ->
@@ -44,8 +77,20 @@ defmodule Vote do
 		end)
 	end
 
-	# evaluate the election
-	# given ballots and the number of seats to elect, returns the election results
+	@doc """
+	Evaluates ballots according the Instant Runoff method.
+	Ballots must contain ranked votes.
+	This is the best choice for electing a single candidate.
+	"""
+	def irv(ballots) do
+		stv(ballots, 1)
+	end
+
+	@doc """
+	Evaluates ballots according the Single Tranferrable Vote method.
+	Ballots must contain ranked votes.
+	This is the best choice for electing a group of candidates.
+	"""
 	def stv(ballots, seats) do
 		# find the unique list of candidates from all the ballots
 		candidates = ballots
@@ -55,6 +100,8 @@ defmodule Vote do
 		# create a result that has an empty entry for every candidate
 		result = candidates
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
+
+		ballots = spoil_ranked(ballots, candidates)
 
 		# perform the initial vote distribution
 		result = distribute(ranked_votes(ballots), result)
@@ -66,8 +113,8 @@ defmodule Vote do
 		stv(result, ballots, 1, 0, seats, quota)
 	end
 
-	# recursively evaluate the rounds of the election
-	# returns updated results
+	# Recursively evaluate the subsequent rounds of STV.
+	# Returns updated results.
 	defp stv(result, ballots, round, elected, seats, quota) do
 		#IO.puts "round #{round}"
 		#IO.inspect result
@@ -132,14 +179,13 @@ defmodule Vote do
 		end
 	end
 
-	# returns a list of ballots that exclude all votes for a candidate
+	# Returns a list of ballots that exclude all votes for a candidate
 	defp trim(ballots, candidate) do
 		ballots
 		|> Stream.map(fn b -> Map.drop(b, [candidate]) end)
-		|> Stream.filter(fn b -> !Enum.empty?(b) end)
 	end
 
-	# return a list of ballots that contributed to a candidates election or exclusion
+	# Returns a list of ballots that contributed to a candidates election or exclusion
 	defp used(ballots, candidate) do
 		ballots
 		|> Stream.filter(fn b ->
@@ -150,7 +196,32 @@ defmodule Vote do
 		end)
 	end
 
-	# returns a map of how many approvals a candidate has obtained
+	# Filters spoiled ballots
+	defp spoil_approval(ballots, candidates) do
+		count = Enum.count(candidates)
+		ballots
+		|> Stream.filter(fn b -> !Enum.empty?(b) end) # have to vote for someone
+		|> Stream.filter(fn b -> Enum.count(b) < count end) # can't vote for everyone
+	end
+
+	# Filters spoiled ballots
+	defp spoil_plurality(ballots) do
+		ballots
+		|> Stream.filter(fn b -> Enum.count(b) == 1 end) # have to vote for exactly one candidate
+	end
+
+	# Filters spoiled ballots
+	defp spoil_ranked(ballots, candidates) do
+		# count = Enum.count(candidates)
+		ballots
+		|> Stream.filter(fn b ->
+			v = Map.values(b)
+			{min, max} = Enum.min_max(v)
+			min == 1 && max == Enum.count(Enum.uniq(v)) # must be a contiguous range of rankings
+		end)
+	end
+
+	# Returns a map of how many approvals a candidate has obtained
 	defp approval_votes(ballots) do
 		ballots
 		|> Stream.flat_map(fn b -> Map.keys(b) end)
@@ -158,7 +229,7 @@ defmodule Vote do
 		|> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
 	end
 
-	# returns a map of how many votes a candidates has obtained in this round
+	# Returns a map of how many votes a candidates has obtained in this round
 	defp ranked_votes(ballots) do
 		ballots
 		|> Stream.map(fn b ->
@@ -173,9 +244,8 @@ defmodule Vote do
 		|> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
 	end
 
-	# applies initial vote distribution to result for all candidates
-	# returns updated results
-	# this is shared between all the algorithms
+	# Applies initial vote distribution to result for all candidates.
+	# Returns updated results.
 	defp distribute(counts, result) do
 		Enum.reduce(result, %{}, fn {rk, rv}, a ->
 			# vote count for the current candidate
@@ -185,13 +255,10 @@ defmodule Vote do
 		end)
 	end
 
-	# applies subsequent vote distribution to result for the elected or excluded candidate
-	# returns updated results
-	# this is specific to STV
+	# Applies subsequent vote distribution to result for the elected or excluded candidate
+	# Returns updated results.
 	defp distribute(ballots, result, candidate, weight) do
 		counts = ranked_votes(trim(ballots, candidate))
-		#IO.puts "distributing #{candidate} weight #{weight}"
-		#IO.inspect counts
 		result = Enum.reduce(result, %{}, fn {rk, rv}, a ->
 			# vote count for the current candidate
 			count = Map.get(counts, rk, 0)
@@ -203,7 +270,7 @@ defmodule Vote do
 		ev = Map.get(counts, :exhausted, 0)
 		# result row for the current candidate
 		rv = Map.get(result, candidate, 0)
-		Map.put(result, candidate, Map.put(rv, :exhausted, ev))
+		Map.put(result, candidate, Map.put(rv, :exhausted, weight * ev))
 	end
 
 end
