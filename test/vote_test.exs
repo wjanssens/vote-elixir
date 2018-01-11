@@ -47,7 +47,7 @@ defmodule VoteTest do
 
     result = Vote.stv(ballots, 3)
 
-    # these results differ from CGP grey since he used Hare quota and this is using Droop quota
+    # these results differ from CGP grey since he used Hare quota (33) and this is using Droop (26) quota
     c = Map.get(result, "monkey")
     assert c.round == 1
     assert c.votes == 33
@@ -87,7 +87,7 @@ defmodule VoteTest do
 
     result = Vote.stv(ballots, 3)
 
-    # these results differ from CGP grey since he used Hare quota (26) and this is using Droop quota (33)
+    # these results differ from CGP grey since he used Hare quota (33) and this is using Droop quota (26)
     c = Map.get(result, "white tiger")
     assert c.round == 1
     assert c.votes == 65
@@ -197,6 +197,7 @@ defmodule VoteTest do
     assert c.round == 10
     assert c.votes == 23
     assert c.status == :elected
+    assert c.surplus == 6
     assert c.exhausted == 6
   end
 
@@ -249,5 +250,38 @@ defmodule VoteTest do
 
     c = Map.get(result, "d")
     assert c.votes == 17
+  end
+
+  test "parse blt" do
+file = """
+4 2          # Four candidates are competing for two seats
+-2           # Bob has withdrawn
+1 4 1 3 2 0  # First ballot
+1 3 4 1 2 0  # Chuck first, Amy second, Diane third, Bob fourth
+1 2 4 1 0    # Bob first, Amy second, Diane third
+1 4 3 0      # Amy first, Chuck second
+6 4 3 0      # Amy first, Chuck second with a weight of 6
+1 0          # An empty ballot
+1 2 - 3 0    # Bob first, no one second, Chuck third
+1 2=3 1 0    # Bob and Chuck first, Diane second
+1 2 3 4 1 0  # Last ballot
+0            # End of ballots marker
+"Diane"      # Candidate 1
+"Bob"        # Candidate 2
+"Chuck"      # Candidate 3
+"Amy"        # Candidate 4
+"Gardening Club Election"  # Title
+"""
+
+    lines = String.split file, "\n"
+    election = Vote.parse_blt lines
+
+    IO.inspect(election)
+
+    assert election.title == "Gardening Club Election"
+    assert election.candidates == ["Diane","Bob","Chuck","Amy"]
+    assert election.seats == 2
+    assert election.withdrawn == [2]
+    assert Enum.count(election.ballots) == 14
   end
 end
