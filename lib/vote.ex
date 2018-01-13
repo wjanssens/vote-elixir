@@ -1,41 +1,66 @@
 defmodule Vote do
 
 	@moduledoc """
-	Provides Ranked (STV, IRV) Plurality (FPTP), and Approval voting algotithms.
-
-	The ranked voting algorithm is able to evaluate STV, AV, and FPTP elections.
-	* STV uses a quota to determine when a candidate is elected in each round
-	* AV is a degenerate case of STV where only one seat is elected and there is no quota
-	* FPTP is a degenerate case of AV where ballots have no rankings and thus no distribution can be performed
-
-	Ballots are in the form:
-	```
-	[
-	  %{"a" => 1, "b" => 2, ...},
-	  %{"c" => 1, "d" => 2, ...},
-	  ...
-	]
-	```
-	and return results in the form:
-	```
-	%{
-	  "a" => %{round: 1, status: :elected, votes: 40.0, surplus: 20.0, exhausted: 0},
-	  "b" => %{round: 2, status: :excluded, votes: 8.0, exhausted: 0},
-	  "c" => %{round: 3, status: :elected, votes: 20.0, surplus: 0.0, exhausted: 0},
-	  "d" => %{votes: 17.0}
-	}
-	```
+	Provides Ranked (STV, AV), and Unranked (FPTP) ballot evaluation.
+	* STV uses a quota to determine when a candidate is elected in rounds
+	* AV is a degenerate case of STV where only one seat is elected,
+	  there is no quota, and all rounds are evaluated until the candidate with
+		the most votes is found
+	* FPTP is a degenerate case of AV where ballots have no rankings and thus
+	  no distribution can be performed
 	"""
 
 	@doc """
-	Evaluates ballots according the Ranked (STV, IRV) elections.
-	* Ballots must contain ranked votes.
-	* This is the best choice for electing a group of candidates.
-	* May also be used to evaluate unranked (Plurality) elections returning a more detailed result
-	* Undervoting is handled by always choosing the candidate with least rank (i.e. absolute rank isn't important, only relative rank is)
-	* Overvoting is handled by choosing one of the candidates (in ballot order) deferring the other(s) into the next round
+	Evaluates an election.
+	* `ballots` a list of ballots;
+	  with ranked votes for STV and AV, or unranked votes for FPTP.
+	* `seats` the number of seats to elect; 1 for AV and FPTP, or > 1 for STV
+	* Undervoting is handled by always choosing the candidate with least rank
+	  (i.e. absolute rank isn't important, only relative rank is)
+	* Overvoting is handled by choosing one of the candidates (in ballot order)
+	  and deferring the other(s) into the next round
+
+	## Ballots
+	Ballots are in the form of a list of maps where each map key is the
+	candidate and each map value is the ranking.
+	A ballot for FPTP should have only one key and a rank of 1.
+	The key should may be either a string or a number.
+	```
+	[
+		%{"a" => 1, "b" => 2, ...},
+		%{"c" => 1, "d" => 2, ...},
+		...
+	]
+	```
+
+	## Results
+	Results are in the form of a map with an entry for each candidate.
+	Each candidate is represented with a map of the following values:
+	* `round` is the round that a candidate was :elected or :excluded in,
+	  or not present for candidates that weren't considered in any round
+	* `votes` is the number of they obtained
+	  (which may not be an integer if there was fractional distrution)
+	* `surplus` is the number of votes that they obtained beyond the quota which
+	  may be transferred to next choice candidates.  There will not be a surplus
+		for excluded candidates
+	* `exhausted` is the number of votes that could not be transferred because
+	  there were no next choice candidates to choose from.
+	* `status` is `:elected`, `:excluded`,
+	  or not present for candidates that weren't considered in any round
+	```
+	%{
+		"a" => %{round: 1, status: :elected, votes: 40.0, surplus: 20.0, exhausted: 0},
+		"b" => %{round: 2, status: :excluded, votes: 8.0, exhausted: 0},
+		"c" => %{round: 3, status: :elected, votes: 20.0, surplus: 0.0, exhausted: 0},
+		"d" => %{votes: 17.0}
+	}
+	```
+
+	## Options
+	    * `:quota` - the quota will be calculated according to `:hare`, `:hagenbach_bischoff`, or `:droop` formulas
+	      Defaults to `:droop`
 	"""
-	def ranked(ballots, seats, options \\ []) do
+	def eval(ballots, seats, options \\ []) do
 		# find the unique list of candidates from all the ballots
 		candidates = ballots
 		|> Stream.flat_map(fn b -> Map.keys(b) end)
@@ -51,8 +76,8 @@ defmodule Vote do
 
 		quota = case seats do
 			1 ->
-				# make the quota essentially infinite since IRV and Plurality don't have a quota
-				Enum.count(ballots)
+				# make the quota a pure majority
+				Enum.count(ballots) / 2
 			_ ->
 				# calculate the number of votes it takes to be elected
 				case Keyword.get(options, :quota, :droop) do
