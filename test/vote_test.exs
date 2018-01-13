@@ -10,7 +10,7 @@ defmodule VoteTest do
     	Enum.map(1..17, fn _ -> %{"a" => 2, "b" => 3, "c" => 4, "d" => 1} end)
     ])
 
-    result = Vote.stv(ballots, 2)
+    result = Vote.ranked(ballots, 2)
     # IO.inspect result
 
     c = Map.get(result, "a")
@@ -45,9 +45,9 @@ defmodule VoteTest do
       Enum.map(1..13, fn _ -> %{"lynx" => 1, "tiger" => 2} end)
     ])
 
-    result = Vote.stv(ballots, 3)
+    # run the election with Droop quota
+    result = Vote.ranked(ballots, 3)
 
-    # these results differ from CGP grey since he used Hare quota (33) and this is using Droop (26) quota
     c = Map.get(result, "monkey")
     assert c.round == 1
     assert c.votes == 33
@@ -74,6 +74,37 @@ defmodule VoteTest do
     assert c.round == 5
     assert c.votes == 34
     assert c.status == :elected
+
+    # run the election with Hare quota
+    result = Vote.ranked(ballots, 3, quota: :hare)
+
+    c = Map.get(result, "monkey")
+    assert c.round == 1
+    assert c.votes == 33
+    assert c.surplus == 0
+    assert c.status == :elected
+
+    c = Map.get(result, "tarsier")
+    assert c.round == 2
+    assert c.votes == 5
+    assert c.status == :excluded
+
+    c = Map.get(result, "gorilla")
+    assert c.round == 3
+    assert c.votes == 33
+    assert c.surplus == 0
+    assert c.status == :elected
+
+    c = Map.get(result, "lynx")
+    assert c.round == 4
+    assert c.votes == 13
+    assert c.status == :excluded
+
+    c = Map.get(result, "tiger")
+    assert c.round == 5
+    assert c.votes == 34
+    assert c.surplus == 1
+    assert c.status == :elected
   end
 
   test "animal_stv_2" do
@@ -85,35 +116,65 @@ defmodule VoteTest do
       Enum.map(1..18, fn _ -> %{"gorilla" => 1, "silverback" => 2} end),
     ])
 
-    result = Vote.stv(ballots, 3)
+    # run the election with Droop quota
+    result = Vote.ranked(ballots, 3)
 
-    # these results differ from CGP grey since he used Hare quota (33) and this is using Droop quota (26)
     c = Map.get(result, "white tiger")
     assert c.round == 1
     assert c.votes == 65
     assert c.surplus == 39
-    assert c.status == :elected
     assert c.exhausted == 0
+    assert c.status == :elected
 
     c = Map.get(result, "tiger")
     assert c.round == 2
     assert c.votes == 40
     assert c.surplus == 14
-    assert c.status == :elected
     assert c.exhausted == 14 # there were no third choices so the 14 surplus are exhausted
+    assert c.status == :elected
 
     c = Map.get(result, "silverback")
     assert c.round == 3
     assert c.votes == 16
-    assert c.status == :excluded
     assert c.exhausted == 0
+    assert c.status == :excluded
 
     c = Map.get(result, "gorilla")
     assert c.round == 4
     assert c.votes == 34
-    assert c.status == :elected
     assert c.surplus == 8
     assert c.exhausted == 8 # there were no third choices so the 8 surplus are exhausted
+    assert c.status == :elected
+
+    # run the election with Hare quota
+    result = Vote.ranked(ballots, 3, quota: :hare)
+
+    c = Map.get(result, "white tiger")
+    assert c.round == 1
+    assert c.votes == 65
+    assert c.surplus == 32
+    assert c.exhausted == 0
+    assert c.status == :elected
+
+    c = Map.get(result, "tiger")
+    assert c.round == 2
+    assert c.votes == 33
+    assert c.surplus == 0
+    assert c.exhausted == 0
+    assert c.status == :elected
+
+    c = Map.get(result, "silverback")
+    assert c.round == 3
+    assert c.votes == 16
+    assert c.exhausted == 0
+    assert c.status == :excluded
+
+    c = Map.get(result, "gorilla")
+    assert c.round == 4
+    assert c.votes == 34
+    assert c.surplus == 1
+    assert c.exhausted == 1
+    assert c.status == :elected
   end
 
   test "animal_stv_3" do
@@ -132,75 +193,112 @@ defmodule VoteTest do
       Enum.map(1..01, fn _ -> %{"buffalo" => 1, "jackalope" => 2, "turtle" => 3} end),
     ])
 
-    result = Vote.stv(ballots, 5)
+    result = Vote.ranked(ballots, 5)
 
     # these results differ from CGP grey since he used Hare quota (20) and this is using Droop (17) quota
     c = Map.get(result, "owl")
     assert c.round == 1
     assert c.votes == 33
     assert c.surplus == 16
-    assert c.status == :elected
     assert c.exhausted == 0
+    assert c.status == :elected
 
     c = Map.get(result, "gorilla")
     assert c.round == 2
     assert c.votes == 32
     assert c.surplus == 15
-    assert c.status == :elected
     assert c.exhausted == 0
+    assert c.status == :elected
 
     c = Map.get(result, "turtle")
     assert c.round == 3
     assert c.votes == 17
     assert c.surplus == 0
-    assert c.status == :elected
     assert c.exhausted == 0
+    assert c.status == :elected
 
     c = Map.get(result, "snake")
     assert c.round == 4
     assert c.votes == 1
-    assert c.status == :excluded
     assert c.exhausted == 1
+    assert c.status == :excluded
 
     c = Map.get(result, "jackalope")
     assert c.round == 5
     assert c.votes == 2
-    assert c.status == :excluded
     assert c.exhausted == 2
+    assert c.status == :excluded
 
     c = Map.get(result, "buffalo")
     assert c.round == 6
     assert c.votes == 3
-    assert c.status == :excluded
     assert c.exhausted == 3
+    assert c.status == :excluded
 
     c = Map.get(result, "lynx")
     assert c.round == 7
     assert c.votes == 4
-    assert c.status == :excluded
     assert c.exhausted == 0
+    assert c.status == :excluded
 
     c = Map.get(result, "tiger")
     assert c.round == 8
     assert c.votes == 20
-    assert c.status == :elected
     assert c.surplus == 3
     assert c.exhausted == 3
+    assert c.status == :elected
 
     c = Map.get(result, "tarsier")
     assert c.round == 9
     assert c.votes == 9.6875
-    assert c.status == :excluded
     assert c.exhausted == 0
+    assert c.status == :excluded
 
     c = Map.get(result, "silverback")
     assert c.round == 10
     assert c.votes == 23
-    assert c.status == :elected
     assert c.surplus == 6
     assert c.exhausted == 6
+    assert c.status == :elected
   end
 
+  test "animal_av" do
+
+    ballots = Enum.concat([
+      Enum.map(1..05, fn _ -> %{"turtle" => 1, "owl" => 2} end),
+      Enum.map(1..25, fn _ -> %{"gorilla" => 1, "owl" => 2} end),
+      Enum.map(1..25, fn _ -> %{"owl" => 1} end),
+      Enum.map(1..30, fn _ -> %{"leopard" => 1} end),
+      Enum.map(1..15, fn _ -> %{"tiger" => 1, "leopard" => 2} end)
+    ])
+
+    result = Vote.ranked(ballots, 1)
+
+    c = Map.get(result, "turtle")
+    assert c.round == 1
+    assert c.votes == 5
+    assert c.status == :excluded
+
+    c = Map.get(result, "tiger")
+    assert c.round == 2
+    assert c.votes == 15
+    assert c.status == :excluded
+
+    c = Map.get(result, "gorilla")
+    assert c.round == 3
+    assert c.votes == 25
+    assert c.status == :excluded
+
+    c = Map.get(result, "leopard")
+    assert c.round == 4
+    assert c.votes == 45
+    assert c.status == :excluded
+
+    c = Map.get(result, "owl")
+    assert c.round == 5
+    assert c.votes == 55
+    assert c.status == :elected
+  end
 
   test "plurality" do
     ballots = Enum.concat([
@@ -210,46 +308,32 @@ defmodule VoteTest do
       Enum.map(1..17, fn _ -> %{"d" => 1} end)
     ])
 
-    result = Vote.plurality(ballots)
-    # IO.inspect result
-
-    c = Map.get(result, "a")
-    assert c.votes == 16
-
-    c = Map.get(result, "b")
-    assert c.votes == 24
-    assert c.status == :elected
+    result = Vote.ranked(ballots, 1)
+    #IO.inspect result
 
     c = Map.get(result, "c")
+    assert c.round == 1
     assert c.votes == 11
-
-    c = Map.get(result, "d")
-    assert c.votes == 17
-  end
-
-  test "approval" do
-    ballots = Enum.concat([
-      Enum.map(1..16, fn _ -> %{"a" => 1, "b" => 1} end),
-      Enum.map(1..24, fn _ -> %{"a" => 1, "c" => 1} end),
-      Enum.map(1..17, fn _ -> %{"a" => 1, "d" => 1} end)
-    ])
-
-    result = Vote.approval(ballots, 2)
-    # IO.inspect result
+    assert c.exhausted == 11
+    assert c.status == :excluded
 
     c = Map.get(result, "a")
-    assert c.votes == 57
-    assert c.status == :elected
+    assert c.round == 2
+    assert c.votes == 16
+    assert c.exhausted == 16
+    assert c.status == :excluded
+
+    c = Map.get(result, "d")
+    assert c.round == 3
+    assert c.votes == 17
+    assert c.exhausted == 17
+    assert c.status == :excluded
 
     c = Map.get(result, "b")
-    assert c.votes == 16
-
-    c = Map.get(result, "c")
+    assert c.round == 4
     assert c.votes == 24
     assert c.status == :elected
 
-    c = Map.get(result, "d")
-    assert c.votes == 17
   end
 
   test "parse blt" do
@@ -276,12 +360,21 @@ file = """
     lines = String.split file, "\n"
     election = Vote.parse_blt lines
 
-    IO.inspect(election)
+    #IO.inspect(election)
 
     assert election.title == "Gardening Club Election"
     assert election.candidates == ["Diane","Bob","Chuck","Amy"]
     assert election.seats == 2
     assert election.withdrawn == [2]
     assert Enum.count(election.ballots) == 14
+
+    result = Vote.ranked(election.ballots, election.seats) |> Vote.rekey(election.candidates)
+
+    #IO.inspect(result)
+
+    assert Map.get(result, "Amy").round == 1
+    assert Map.get(result, "Diane").round == 2
+    assert Map.get(result, "Chuck").round == 3
+    assert Map.get(result, "Bob").round == 4
   end
 end
