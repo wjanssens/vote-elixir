@@ -71,7 +71,7 @@ defmodule Vote do
 		|> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{ votes: 0 }) end)
 
 		# perform the initial vote distribution
-		result = distribute(ranked_votes(spoil_ranked(ballots)), result)
+		result = distribute(ranked_votes(ballots), result)
 		#IO.inspect result
 
 		quota = case seats do
@@ -98,13 +98,14 @@ defmodule Vote do
 		cond do
 			seats == elected ->
 				result
-		 	seats == 1 && Enum.count(result, fn {_,v} -> !Map.has_key?(v, :status) end) == 1 ->
-				# nobody has satisfied the quota
-				# elect the excluded candidate with the most votes
+		 	Enum.count(result, fn {_,v} -> !Map.has_key?(v, :status) end) == 1 ->
+				# nobody has satisfied the quota and only one candidate standing
+				# so they win by default event without satisfying the quota
 				{elected_candidate, elected_result} = result
 				|> Enum.find(fn {_,v} -> !Map.has_key?(v, :status) end)
 
 				elected_result = elected_result
+				|> Map.put(:surplus, elected_result.votes - quota)
 				|> Map.put(:status, :elected)
 				|> Map.put(:round, round)
 				result = Map.put(result, elected_candidate, elected_result)
@@ -168,10 +169,33 @@ defmodule Vote do
 		end
 	end
 
-	# Returns a list of ballots that exclude all votes for a candidate
+	@doc """
+	Returns a list of `ballots` that exclude all votes for `candidates`.
+	This should be called to remove all withdrawn candidates prior to calling `eval/3`.
+	"""
 	def filter_candidates(ballots, candidates) do
 		ballots
 		|> Stream.map(fn b -> Map.drop(b, candidates) end)
+	end
+
+	@doc """
+	Filters spoiled ballots
+	"""
+	def spoil_plurality(ballots) do
+		ballots
+		|> Stream.filter(fn b -> Enum.count(b) == 1 end) # have to vote for exactly one candidate
+	end
+
+	@doc """
+	Converts ranked ballots into unranked ballots.
+	This is useful for conducting a simulated plurality election from ranked ballots.
+	"""
+	def unranked(ballots) do
+		ballots
+		|> Stream.map(fn b ->
+			{candidate, _} = Enum.min_by(b, fn {_,v} -> v end, {:nobody,0})
+			%{candidate => 1}
+		end)
 	end
 
 	# Returns a list of ballots that contributed to a candidates election or exclusion
@@ -185,27 +209,7 @@ defmodule Vote do
 		end)
 	end
 
-	# Filters spoiled ballots
-	def spoil_approval(ballots, candidates) do
-		count = Enum.count(candidates)
-		ballots
-		|> Stream.filter(fn b -> !Enum.empty?(b) end) # have to vote for someone
-		|> Stream.filter(fn b -> Enum.count(b) < count end) # can't vote for everyone
-	end
-
-	# Filters spoiled ballots
-	def spoil_plurality(ballots) do
-		ballots
-		|> Stream.filter(fn b -> Enum.count(b) == 1 end) # have to vote for exactly one candidate
-	end
-
-	# Filters spoiled ballots
-	def spoil_ranked(ballots) do
-		ballots
-		|> Stream.filter(fn b -> !Enum.empty?(b) end) # have to vote for someone
-	end
-
-	# Returns a map of how many votes a candidates has obtained in this round
+	# Returns a map of how many votes a candidates has obtained
 	defp ranked_votes(ballots) do
 		ballots
 		|> Stream.map(fn b ->
@@ -250,9 +254,16 @@ defmodule Vote do
 	end
 
 
+	@doc """
+	Parses a BLT file `stream`.
+	The BLT file format is described here: https://www.opavote.com/help/overview#blt-file-format
+	Returns a map containing:
+	* `seats`: the number of seats to be elected
+	* `ballots`: a list of ballots that can be passed to `eval/3`
+	* `candidates`: a list of candidate names
+	* `withdrawn`: a list of candidate ids that should be filtered from the ballots (optional)
+	"""
 	def parse_blt(stream) do
-		# https://www.opavote.com/help/overview#blt-file-format
-
 		# file consists of the following lines
 		# :initial    1 line     <number of candidates c> <number of seats s>
 		# :ballot     0~1 line   <the candidates that have withdrawn>+
@@ -334,6 +345,10 @@ defmodule Vote do
 		end) # reduce
 	end
 
+	@doc """
+	Takes `results` with numeric candidate keys and returns results
+	with the candidate keys from `candidates`.
+	"""
 	def rekey(result, candidates) do
 		Enum.reduce(result, %{}, fn {i,v}, a -> Map.put(a, Enum.at(candidates, i-1), v) end)
 	end
