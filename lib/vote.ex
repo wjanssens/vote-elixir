@@ -2,23 +2,24 @@ defmodule Vote do
 
 	@moduledoc """
 	Provides Ranked (STV, AV), and Unranked (FPTP) ballot evaluation.
-	* STV uses a quota to determine when a candidate is elected in rounds
+	* STV uses a quota to determine when a candidate is elected in rounds.
+		Droop, Hare, and Hagenbach Bischoff quotas are available.
 	* AV is a degenerate case of STV where only one seat is elected,
-	  there is no quota, and all rounds are evaluated until the candidate with
-		the most votes is found
+		and all rounds are evaluated until the candidate with the majority is elected
+		or the last candidate standing with the most votes is elected.
 	* FPTP is a degenerate case of AV where ballots have no rankings and thus
-	  no distribution can be performed
+	  no distribution can be performed.
 	"""
 
 	@doc """
 	Evaluates an election.
 	* `ballots` a list of ballots;
-	  with ranked votes for STV and AV, or unranked votes for FPTP.
+		with ranked votes for STV and AV, or unranked votes for FPTP.
 	* `seats` the number of seats to elect; 1 for AV and FPTP, or > 1 for STV
 	* Undervoting is handled by always choosing the candidate with least rank
-	  (i.e. absolute rank isn't important, only relative rank is)
+		(i.e. absolute rank isn't important, only relative rank is)
 	* Overvoting is handled by choosing one of the candidates (in ballot order)
-	  and deferring the other(s) into the next round
+		and deferring the other(s) into the next round
 
 	## Ballots
 	Ballots are in the form of a list of maps where each map key is the
