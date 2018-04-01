@@ -1,3 +1,11 @@
+# TODO implement Borda count method
+# TODO implement Block Plurality (multiple seats, unranked votes)
+# TODO implement dynamic vs static option
+# TODO implement STV tie breaking options
+# TODO implement fractional vote rounding precision options
+# TODO implement Meek STV
+# TODO implement Baas STV
+
 defmodule Vote do
   @moduledoc """
   Provides Ranked (STV, AV), and Unranked (FPTP) ballot evaluation.
@@ -200,6 +208,42 @@ defmodule Vote do
     # have to vote for exactly one candidate
     ballots
     |> Stream.filter(fn b -> Enum.count(b) == 1 end)
+  end
+
+  def approval(ballots, seats) do
+    candidates =
+      ballots
+      |> Stream.flat_map(fn b -> Map.keys(b) end)
+      |> Stream.uniq()
+
+    # create a result that has an empty entry for every candidate
+    result =
+      candidates
+      |> Enum.reduce(%{}, fn c, acc -> Map.put(acc, c, %{votes: 0}) end)
+
+    result = distribute(approval_votes(ballots), result)
+
+    1..seats
+    |> Enum.reduce(result, fn _, a ->
+      {elected_candidate, elected_result} =
+        a
+        |> Stream.filter(fn {_, v} -> !Map.has_key?(v, :status) end)
+        |> Enum.max_by(fn {_, v} -> v.votes end)
+
+      elected_result =
+        elected_result
+        |> Map.put(:status, :elected)
+
+      Map.put(a, elected_candidate, elected_result)
+    end)
+  end
+
+  # returns a map of how many approvals a candidate has obtained
+  defp approval_votes(ballots) do
+    # count the number of votes for each candidate
+    ballots
+    |> Stream.flat_map(fn b -> Map.keys(b) end)
+    |> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
   end
 
   @doc """

@@ -1,6 +1,7 @@
 # Vote
 
-Implements the Single Transferrable Vote algorithm
+Implements Single Transferrable Vote, Alternative Vote,
+and First Past the Post
 
 Takes a list of ballots in the form:
 ```
