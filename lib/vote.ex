@@ -10,8 +10,8 @@ defmodule Vote do
   @moduledoc """
   Provides Ranked (STV, AV), and Unranked (FPTP) ballot evaluation.
   * STV uses a quota to determine when a candidate is elected in rounds.
-  	Droop, Hare, and Hagenbach Bischoff quotas are available.
-  * AV is a degenerate case of STV where only one seat is elected,
+  	Droop, Hare, Impirali, and Hagenbach Bischoff quotas are available.
+  * IRV is a degenerate case of STV where only one seat is elected,
   	and all rounds are evaluated until the candidate with the majority is elected
   	or the last candidate standing with the most votes is elected.
   * FPTP is a degenerate case of AV where ballots have no rankings and thus
@@ -65,8 +65,9 @@ defmodule Vote do
   ```
 
   ## Options
-      * `:quota` - the quota will be calculated according to `:hare`, `:hagenbach_bischoff`, or `:droop` formulas
-        Defaults to `:droop`
+      * `:quota` - the quota will be calculated according to
+        `:imperali`, `:hare`, `:hagenbach_bischoff`, or `:droop` formulas; defaults to `:droop`
+      * `:callback` - a function that will receive the intermediate results for each round
   """
   def eval(ballots, seats, options \\ []) do
     # find the unique list of candidates from all the ballots
@@ -87,12 +88,13 @@ defmodule Vote do
     quota =
       case seats do
         1 ->
-          # make the quota a pure majority
+          # make the quota a pure majority (equivalent to hagenbach_bischoff)
           Enum.count(ballots) / 2
 
         _ ->
           # calculate the number of votes it takes to be elected
           case Keyword.get(options, :quota, :droop) do
+            :imperali -> Float.floor(Enum.count(ballots) / (seats + 2))
             :hare -> Float.floor(Enum.count(ballots) / seats)
             :hagenbach_bischoff -> Float.floor(Enum.count(ballots) / (seats + 1))
             _ -> Float.floor(Enum.count(ballots) / (seats + 1) + 1)
@@ -105,6 +107,9 @@ defmodule Vote do
   # Recursively evaluate the subsequent rounds of the ranked election.
   # Returns updated results.
   defp eval(result, ballots, round, elected, seats, quota, options \\ []) do
+    callback = Keyword.get(options, :callback)
+    unless is_nil(callback) do callback.(round, result) end
+
     # IO.puts "round #{round}"
     # IO.inspect result
     cond do
@@ -124,7 +129,7 @@ defmodule Vote do
           |> Map.put(:status, :elected)
           |> Map.put(:round, round)
 
-        result = Map.put(result, elected_candidate, elected_result)
+        Map.put(result, elected_candidate, elected_result)
 
       true ->
         # IO.inspect result
@@ -202,10 +207,10 @@ defmodule Vote do
   end
 
   @doc """
-  Filters spoiled ballots
+  Filters spoiled ballots for FPTP method
+  Ballots must have exactly one vote
   """
   def spoil_plurality(ballots) do
-    # have to vote for exactly one candidate
     ballots
     |> Stream.filter(fn b -> Enum.count(b) == 1 end)
   end
@@ -224,18 +229,21 @@ defmodule Vote do
     result = distribute(approval_votes(ballots), result)
 
     1..seats
-    |> Enum.reduce(result, fn _, a ->
-      {elected_candidate, elected_result} =
-        a
-        |> Stream.filter(fn {_, v} -> !Map.has_key?(v, :status) end)
-        |> Enum.max_by(fn {_, v} -> v.votes end)
+    |> Enum.reduce(
+         result,
+         fn _, a ->
+           {elected_candidate, elected_result} =
+             a
+             |> Stream.filter(fn {_, v} -> !Map.has_key?(v, :status) end)
+             |> Enum.max_by(fn {_, v} -> v.votes end)
 
-      elected_result =
-        elected_result
-        |> Map.put(:status, :elected)
+           elected_result =
+             elected_result
+             |> Map.put(:status, :elected)
 
-      Map.put(a, elected_candidate, elected_result)
-    end)
+           Map.put(a, elected_candidate, elected_result)
+         end
+       )
   end
 
   # returns a map of how many approvals a candidate has obtained
@@ -252,47 +260,57 @@ defmodule Vote do
   """
   def unranked(ballots) do
     ballots
-    |> Stream.map(fn b ->
-      {candidate, _} = Enum.min_by(b, fn {_, v} -> v end, {:nobody, 0})
-      %{candidate => 1}
-    end)
+    |> Stream.map(
+         fn b ->
+           {candidate, _} = Enum.min_by(b, fn {_, v} -> v end, {:nobody, 0})
+           %{candidate => 1}
+         end
+       )
   end
 
   # Returns a list of ballots that contributed to a candidates election or exclusion
   defp used(ballots, candidate) do
     ballots
-    |> Stream.filter(fn b ->
-      b
-      |> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
-      |> Tuple.to_list()
-      |> Enum.member?(candidate)
-    end)
+    |> Stream.filter(
+         fn b ->
+           b
+           |> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
+           |> Tuple.to_list()
+           |> Enum.member?(candidate)
+         end
+       )
   end
 
   # Returns a map of how many votes a candidates has obtained
   defp ranked_votes(ballots) do
     # count the number of votes for each candidate
     ballots
-    |> Stream.map(fn b ->
-      # vote(s) with the lowest rank
-      # candidate from the vote
-      b
-      |> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
-      |> Tuple.to_list()
-      |> List.first()
-    end)
+    |> Stream.map(
+         fn b ->
+           # vote(s) with the lowest rank
+           # candidate from the vote
+           b
+           |> Enum.min_by(fn {_, v} -> v end, fn -> {:exhausted, 0} end)
+           |> Tuple.to_list()
+           |> List.first()
+         end
+       )
     |> Enum.reduce(%{}, fn c, a -> Map.update(a, c, 1, &(&1 + 1)) end)
   end
 
   # Applies initial vote distribution to result for all candidates.
   # Returns updated results.
   defp distribute(counts, result) do
-    Enum.reduce(result, %{}, fn {rk, rv}, a ->
-      # vote count for the current candidate
-      cv = Map.get(counts, rk, 0)
-      # update result row for candidate
-      Map.put(a, rk, Map.update(rv, :votes, 0, &(&1 + cv)))
-    end)
+    Enum.reduce(
+      result,
+      %{},
+      fn {rk, rv}, a ->
+        # vote count for the current candidate
+        cv = Map.get(counts, rk, 0)
+        # update result row for candidate
+        Map.put(a, rk, Map.update(rv, :votes, 0, &(&1 + cv)))
+      end
+    )
   end
 
   # Applies subsequent vote distribution to result for the elected or excluded candidate
@@ -301,18 +319,22 @@ defmodule Vote do
     counts = ranked_votes(filter_candidates(ballots, [candidate]))
 
     result =
-      Enum.reduce(result, %{}, fn {rk, rv}, a ->
-        # vote count for the current candidate
-        count = Map.get(counts, rk, 0)
-        # update result row for candidate
-        Map.put(a, rk, Map.update(rv, :votes, 0, &(&1 + weight * count)))
-      end)
+      Enum.reduce(
+        result,
+        %{},
+        fn {rk, rv}, a ->
+          # vote count for the current candidate
+          count = Map.get(counts, rk, 0)
+          # update result row for candidate
+          Map.put(a, rk, Map.update(rv, :votes, 0, &(&1 + Float.round(weight * count, 5))))
+        end
+      )
 
     # exhausted count
     ev = Map.get(counts, :exhausted, 0)
     # result row for the current candidate
     rv = Map.get(result, candidate, 0)
-    Map.put(result, candidate, Map.put(rv, :exhausted, weight * ev))
+    Map.put(result, candidate, Map.put(rv, :exhausted, Float.round(weight * ev, 5)))
   end
 
   @doc """
@@ -340,93 +362,121 @@ defmodule Vote do
     # candidate may be a - to indicate a skipped vote
     # two candidates may be joined with = to indicate the have equal rank
 
-    Enum.reduce(stream, %{state: :initial}, fn line, a ->
-      [data | _] = String.split(line, "#", parts: 2)
-      data = String.trim(data)
+    Enum.reduce(
+      stream,
+      %{state: :initial},
+      fn line, a ->
+        [data | _] = String.split(line, "#", parts: 2)
+        data = String.trim(data)
 
-      cond do
-        # comment only line
-        data == "" ->
-          a
+        cond do
+          # comment only line
+          data == "" ->
+            a
 
-        # first line
-        a.state == :initial ->
-          [c, s] = String.split(data, " ")
-          {candidates, _} = Integer.parse(c)
-          {seats, _} = Integer.parse(s)
+          # first line
+          a.state == :initial ->
+            [c, s] = String.split(data, " ")
+            {candidates, _} = Integer.parse(c)
+            {seats, _} = Integer.parse(s)
 
-          a
-          |> Map.put(:remaining, candidates)
-          |> Map.put(:seats, seats)
-          |> Map.put(:state, :ballot)
-          |> Map.put(:ballots, [])
-          |> Map.put(:candidates, [])
+            a
+            |> Map.put(:remaining, candidates)
+            |> Map.put(:seats, seats)
+            |> Map.put(:state, :ballot)
+            |> Map.put(:ballots, [])
+            |> Map.put(:candidates, [])
 
-        # end of ballots marker line
-        a.state == :ballot && data == "0" ->
-          Map.put(a, :state, :candidate)
+          # end of ballots marker line
+          a.state == :ballot && data == "0" ->
+            Map.put(a, :state, :candidate)
 
-        # withdrawn candidates line
-        a.state == :ballot && String.starts_with?(data, "-") ->
-          withdrawn =
-            Regex.scan(~r/(-\d+)+/, data)
-            |> Enum.map(fn [match, _] ->
-              {c, _} = Integer.parse(match)
-              -c
-            end)
+          # withdrawn candidates line
+          a.state == :ballot && String.starts_with?(data, "-") ->
+            withdrawn =
+              Regex.scan(~r/(-\d+)+/, data)
+              |> Enum.map(
+                   fn [match, _] ->
+                     {c, _} = Integer.parse(match)
+                     -c
+                   end
+                 )
 
-          Map.put(a, :withdrawn, withdrawn)
+            Map.put(a, :withdrawn, withdrawn)
 
-        # ballot line
-        a.state == :ballot ->
-          [weight | candidates] = String.split(data, " ")
-          {weight, _} = Integer.parse(weight)
+          # ballot line
+          a.state == :ballot ->
+            [weight | candidates] = String.split(data, " ")
+            {weight, _} = Integer.parse(weight)
 
-          ballot =
-            Enum.reduce(candidates, {1, %{}}, fn term, {rank, ballot} ->
-              case term do
-                "0" ->
-                  # end of ballot marker
-                  ballot
+            ballot =
+              Enum.reduce(
+                candidates,
+                {1, %{}},
+                fn term, {rank, ballot} ->
+                  case term do
+                    "0" ->
+                      # end of ballot marker
+                      ballot
 
-                "-" ->
-                  # undervote marker
-                  {rank + 1, ballot}
+                    "-" ->
+                      # undervote marker
+                      {rank + 1, ballot}
 
-                _ ->
-                  {rank + 1,
-                   Enum.reduce(String.split(term, "="), ballot, fn c, a ->
-                     {c, _} = Integer.parse(c)
-                     Map.put(a, c, rank)
-                   end)}
+                    _ ->
+                      {
+                        rank + 1,
+                        Enum.reduce(
+                          String.split(term, "="),
+                          ballot,
+                          fn c, a ->
+                            {c, _} = Integer.parse(c)
+                            Map.put(a, c, rank)
+                          end
+                        )
+                      }
+                  end
+                end
+              )
+
+            Map.update!(
+              a,
+              :ballots,
+              fn ballots ->
+                Enum.reduce(
+                  1..weight,
+                  ballots,
+                  fn _, a ->
+                    [ballot] ++ a
+                  end
+                )
               end
-            end)
+            )
 
-          Map.update!(a, :ballots, fn ballots ->
-            Enum.reduce(1..weight, ballots, fn _, a ->
-              [ballot] ++ a
-            end)
-          end)
+          a.state == :candidate && a.remaining == 0 ->
+            a
+            |> Map.put(:title, String.replace(String.trim(data, "\""), "\\", ""))
+            |> Map.delete(:remaining)
+            |> Map.delete(:state)
 
-        a.state == :candidate && a.remaining == 0 ->
-          a
-          |> Map.put(:title, String.replace(String.trim(data, "\""), "\\", ""))
-          |> Map.delete(:remaining)
-          |> Map.delete(:state)
+          a.state == :candidate ->
+            a
+            |> Map.update(
+                 :candidates,
+                 [],
+                 fn candidates ->
+                   candidates ++ [String.replace(String.trim(data, "\""), "\\", "")]
+                 end
+               )
+            |> Map.update!(:remaining, &(&1 - 1))
 
-        a.state == :candidate ->
-          a
-          |> Map.update(:candidates, [], fn candidates ->
-            candidates ++ [String.replace(String.trim(data, "\""), "\\", "")]
-          end)
-          |> Map.update!(:remaining, &(&1 - 1))
+          true ->
+            a
+        end
 
-        true ->
-          a
+        # cond
       end
-
-      # cond
-    end)
+    )
 
     # reduce
   end
